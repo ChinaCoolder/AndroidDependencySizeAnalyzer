@@ -1,4 +1,5 @@
-project.version = "1.663"
+import org.jetbrains.kotlin.konan.properties.Properties
+import java.io.FileInputStream
 
 plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
@@ -6,7 +7,33 @@ plugins {
 
     // Apply the Kotlin JVM plugin to add support for Kotlin.
     id("org.jetbrains.kotlin.jvm") version "1.6.21"
-    id("maven-publish")
+
+    `maven-publish`
+    signing
+}
+
+ext["signing.keyId"] = ""
+ext["signing.password"] = ""
+ext["signing.secretKeyRingFile"] = ""
+ext["ossrhUsername"] = ""
+ext["ossrhPassword"] = ""
+ext["publishVersion"] = ""
+ext["releaseUrl"] = ""
+ext["snapshotUrl"] = ""
+ext["groupId"] = ""
+ext["artifactId"] = ""
+
+val file = project.rootProject.file("publish.settings.gradle.kts")
+if (file.exists()) {
+    val p = Properties()
+    FileInputStream(file).use {
+        p.load(it)
+        p.forEach { name, value ->
+            ext[name.toString()] = value.toString()
+        }
+    }
+} else {
+    println("Props file not found")
 }
 
 repositories {
@@ -36,19 +63,6 @@ gradlePlugin {
     }
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
-            versionMapping{
-                usage("java-runtime") {
-                    fromResolutionResult()
-                }
-            }
-        }
-    }
-}
-
 // Add a source set for the functional test suite
 val functionalTestSourceSet = sourceSets.create("functionalTest") {
 }
@@ -66,4 +80,75 @@ gradlePlugin.testSourceSets(functionalTestSourceSet)
 tasks.named<Task>("check") {
     // Run the functional tests as part of `check`
     dependsOn(functionalTest)
+}
+
+
+java {
+    withJavadocJar()
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("analyzerPlugin") {
+            groupId = project.ext["groupId"].toString()
+            artifactId = project.ext["artifactId"].toString()
+            version = project.ext["publishVersion"].toString()
+
+            from(components["java"])
+            versionMapping{
+                usage("java-api") {
+                    fromResolutionOf("runtimeClasspath")
+                }
+                usage("java-runtime") {
+                    fromResolutionResult()
+                }
+            }
+            pom {
+                name.set("Android Dependency Size Analyzer")
+                description.set("a analyzer to analyze android dependency")
+                url.set("https://github.com/ChinaCoolder/AndroidDependencySizeAnalyzer")
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("jiayichi")
+                        name.set("JiaYiChi")
+                        email.set("jiayichi.me@foxmail.com")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:git://github.com/ChinaCoolder/AndroidDependencySizeAnalyzer.git")
+                    developerConnection.set("scm:git:ssh://github.com/ChinaCoolder/AndroidDependencySizeAnalyzer.git")
+                    url.set("https://github.com/ChinaCoolder/AndroidDependencySizeAnalyzer")
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "MavenCentral"
+            val releasesRepoUrl = uri(project.ext["releaseUrl"].toString())
+            val snapshotsRepoUrl = uri(project.ext["snapshotUrl"].toString())
+            url = if (project.ext["publishVersion"].toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+            credentials {
+                username = project.ext["ossrhUsername"].toString()
+                password = project.ext["ossrhPassword"].toString()
+            }
+        }
+    }
+}
+
+signing {
+    sign(publishing.publications["analyzerPlugin"])
+}
+
+tasks.javadoc {
+    if (JavaVersion.current().isJava9Compatible) {
+        (options as StandardJavadocDocletOptions).addBooleanOption("html5", true)
+    }
 }
