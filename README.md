@@ -20,7 +20,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath "io.github.chinacoolder:android_dependency_size_analyzer:1.0.0"
+        classpath "io.github.chinacoolder:android_dependency_size_analyzer:${last_version}"
     }
 }
 ```
